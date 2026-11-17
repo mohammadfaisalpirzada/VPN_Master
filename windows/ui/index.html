@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VPN Master</title>
+<style>
+  :root{
+    --bg:#0d1117;--panel:#161b26;--panel2:#1c2231;--line:#252c3d;--line2:#30384c;
+    --txt:#e6e9f0;--mute:#8a93a8;--dim:#5d667b;--ok:#2fd79b;--okd:#0f3b2c;--bad:#f2556d;--acc:#4f7cff;--warn:#f5b84b;
+    --r:12px;--ring:min(132px,20vh)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font:13px/1.45 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--txt);user-select:none;overflow:hidden}
+  svg{display:block}
+  button{font:inherit;color:inherit;border:none;background:none;cursor:pointer}
+  .app{display:flex;flex-direction:column;height:100vh;padding:14px 16px 10px;gap:12px}
+
+  header{display:flex;align-items:center;justify-content:space-between}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px;letter-spacing:.1px}
+  .logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(140deg,#4f7cff,#2fd79b);display:grid;place-items:center}
+  .chip{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--mute)}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--dim)}
+  .dot.on{background:var(--ok);box-shadow:0 0 0 3px rgba(47,215,155,.15)}
+  .dot.wait{background:var(--warn)}
+
+  /* status card */
+  .status{display:flex;align-items:center;gap:16px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px}
+  .pw{position:relative;width:var(--ring);height:var(--ring);flex:none;border-radius:50%;display:grid;place-items:center;
+      background:radial-gradient(circle at 50% 40%,#232a3b,#171c28 70%);border:1px solid var(--line2);transition:.3s}
+  .pw:hover{border-color:#3d4760}
+  .pw svg{width:38%;height:38%;color:var(--mute);transition:.3s}
+  .pw.on{border-color:var(--ok);box-shadow:0 0 0 6px rgba(47,215,155,.08),0 0 40px -6px rgba(47,215,155,.45)}
+  .pw.on svg{color:var(--ok)}
+  .pw.wait::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid transparent;border-top-color:var(--warn);animation:spin .9s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .info{flex:1;min-width:0}
+  .state{font-size:18px;font-weight:600}
+  .sub{color:var(--mute);font-size:12px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .timer{color:var(--ok);font-variant-numeric:tabular-nums}
+  .meta{display:grid;grid-template-columns:62px 1fr;gap:3px 6px;margin-top:10px;font-size:12px}
+  .meta span{color:var(--dim)} .meta b{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .disc{display:none;margin-top:10px;height:30px;padding:0 14px;border-radius:8px;background:rgba(242,85,109,.12);color:#ff8597;font-weight:600;border:1px solid rgba(242,85,109,.35)}
+  .disc:hover{background:rgba(242,85,109,.2)}
+  .disc.show{display:inline-flex;align-items:center;gap:6px}
+
+  /* segmented */
+  .seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px}
+  .seg button{flex:1;height:30px;border-radius:7px;color:var(--mute);font-weight:500}
+  .seg button.on{background:var(--panel2);color:var(--txt);box-shadow:inset 0 0 0 1px var(--line2)}
+
+  .panel{flex:1;min-height:0;display:none;flex-direction:column;gap:10px}
+  .panel.on{display:flex}
+  .label{font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;display:flex;justify-content:space-between;align-items:center}
+  .label button{color:var(--acc);text-transform:none;letter-spacing:0;font-size:12px;font-weight:600;display:flex;align-items:center;gap:4px}
+  .label button:hover{color:#7c9dff}
+
+  .list{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow-y:auto}
+  .list.grow{flex:1;min-height:60px}
+  .list::-webkit-scrollbar{width:6px}.list::-webkit-scrollbar-thumb{background:var(--line2);border-radius:6px}
+  .row{display:flex;align-items:center;gap:11px;padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:none}
+  .row:hover{background:var(--panel2)}
+  .row.sel{background:#1a2338}
+  .row.sel .nm{color:#fff}
+  .flag{width:22px;height:16px;border-radius:3px;object-fit:cover;flex:none;background:var(--line2)}
+  .tx{flex:1;min-width:0}
+  .nm{font-weight:500}
+  .ds{font-size:11.5px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .go{height:28px;padding:0 12px;border-radius:7px;background:var(--acc);color:#fff;font-weight:600;font-size:12px}
+  .go:hover{background:#6189ff}
+  .ic{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--dim)}
+  .ic:hover{background:var(--line);color:var(--bad)}
+  .ic svg{width:14px;height:14px}
+  .sig{display:flex;gap:2px;align-items:flex-end;height:12px}
+  .sig i{width:3px;background:var(--line2);border-radius:1px}.sig i.f{background:var(--ok)}
+  .ms{font-size:11px;color:var(--mute);width:40px;text-align:right;font-variant-numeric:tabular-nums}
+  .empty{padding:18px 14px;text-align:center;color:var(--mute);font-size:12.5px}
+  .empty button{color:var(--acc);font-weight:600}
+
+  .bar{display:flex;gap:8px}
+  select{flex:1;min-width:0;height:32px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--txt);font:inherit;padding:0 8px;outline:none}
+  .btn{height:32px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);display:flex;align-items:center;gap:6px;font-weight:500}
+  .btn:hover{background:var(--panel2)}
+  .btn svg{width:14px;height:14px}
+  .btn.pri{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+  .btn.pri:hover{background:#6189ff}
+
+  footer{display:flex;justify-content:space-between;font-size:11px;color:var(--dim)}
+  footer button{color:var(--dim)} footer button:hover{color:var(--txt)}
+
+  /* modal */
+  .scrim{position:fixed;inset:0;background:rgba(5,8,14,.72);display:none;align-items:center;justify-content:center;padding:16px;z-index:20}
+  .scrim.show{display:flex}
+  .modal{width:100%;max-width:380px;max-height:100%;overflow:auto;background:var(--panel);border:1px solid var(--line2);border-radius:16px;padding:18px}
+  .mh{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px}
+  .mh h3{font-size:15px;font-weight:600}
+  .mp{color:var(--mute);font-size:12.5px;margin-bottom:14px}
+  .step{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+  .num{width:24px;height:24px;border-radius:50%;background:var(--panel2);border:1px solid var(--line2);display:grid;place-items:center;font-size:12px;font-weight:600;flex:none;color:var(--mute)}
+  .st{flex:1}
+  .st b{font-weight:600;display:block}
+  .st small{color:var(--mute);font-size:12px;display:block;margin:2px 0 8px}
+  .note{font-size:11.5px;color:var(--dim);border-top:1px solid var(--line);padding-top:10px}
+
+  .toast{position:fixed;left:50%;bottom:18px;transform:translate(-50%,12px);opacity:0;transition:.25s;pointer-events:none;z-index:30;
+         background:#1f2636;border:1px solid var(--line2);color:var(--txt);padding:9px 14px;border-radius:10px;font-size:12px;width:max-content;max-width:min(380px,90vw);text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+  .toast.err{border-color:rgba(242,85,109,.5);color:#ffb3bf}
+  .toast.good{border-color:rgba(47,215,155,.5);color:#b6f5dc}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7z"/><path d="M14 3v4h4"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="#fff"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z" opacity=".95"/><path d="M8.5 12.5l2.3 2.3 4.7-5" stroke="#4f7cff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+
+<div class="app">
+  <header>
+    <div class="brand"><div class="logo"><svg width="16" height="16"><use href="#i-shield"/></svg></div>VPN Master</div>
+    <div class="chip"><span class="dot" id="dot"></span><span id="chip">Not protected</span></div>
+  </header>
+
+  <div class="status">
+    <button class="pw" id="power" title="Connect / Disconnect"><svg><use href="#i-power"/></svg></button>
+    <div class="info">
+      <div class="state" id="state">Not connected</div>
+      <div class="sub" id="sub">Select a location to connect</div>
+      <div class="meta"><span>IP address</span><b id="ip">—</b><span>Location</span><b id="loc">—</b></div>
+      <button class="disc" id="disc"><svg width="10" height="10"><use href="#i-stop"/></svg>Disconnect</button>
+    </div>
+  </div>
+
+  <div class="seg">
+    <button class="on" data-t="us">United States</button>
+    <button data-t="free">All locations</button>
+  </div>
+
+  <!-- United States -->
+  <div class="panel on" id="p-us">
+    <div class="label">Quick connect</div>
+    <div class="list">
+      <div class="row" id="quick">
+        <img class="flag" src="https://flagcdn.com/w40/us.png" onerror="this.style.visibility='hidden'">
+        <div class="tx"><div class="nm">United States / Canada</div><div class="ds">Fastest public server available</div></div>
+        <button class="go" id="usAuto">Connect</button>
+      </div>
+    </div>
+    <div class="label">My locations <button id="addBtn"><svg width="12" height="12"><use href="#i-plus"/></svg>Add location</button></div>
+    <div class="list grow" id="confs"></div>
+  </div>
+
+  <!-- All locations -->
+  <div class="panel" id="p-free">
+    <div class="bar">
+      <select id="country"><option value="">All countries</option></select>
+      <button class="btn" id="refresh" title="Refresh list"><svg><use href="#i-refresh"/></svg></button>
+      <button class="btn pri" id="best"><svg><use href="#i-bolt"/></svg>Fastest</button>
+    </div>
+    <div class="list grow" id="list"><div class="empty">Loading locations…</div></div>
+  </div>
+
+  <footer>
+    <span id="foot">v2.1</span>
+    <button onclick="openURL('https://themastersahib.com')">themastersahib.com</button>
+  </footer>
+</div>
+
+<!-- Add location dialog -->
+<div class="scrim" id="scrim">
+  <div class="modal">
+    <div class="mh"><h3>Add a US location</h3><button class="ic" id="mClose"><svg><use href="#i-x"/></svg></button></div>
+    <div class="mp">Use a free Proton VPN server for a stable US connection. One-time setup.</div>
+    <div class="step"><div class="num">1</div><div class="st"><b>Create a free account</b><small>Email sign-up, unlimited data.</small>
+      <button class="btn" onclick="openURL('https://account.protonvpn.com/signup')"><svg><use href="#i-ext"/></svg>Open Proton VPN</button></div></div>
+    <div class="step"><div class="num">2</div><div class="st"><b>Download a WireGuard file</b><small>Downloads → WireGuard configuration → Windows → choose a <b style="display:inline">US-FREE</b> server → Create.</small>
+      <button class="btn" onclick="openURL('https://account.protonvpn.com/downloads')"><svg><use href="#i-ext"/></svg>Open downloads</button></div></div>
+    <div class="step"><div class="num">3</div><div class="st"><b>Import the file</b><small>Select the downloaded <b style="display:inline">.conf</b> file, or drag it onto this window.</small>
+      <button class="btn pri" id="imp"><svg><use href="#i-file"/></svg>Choose file…</button></div></div>
+    <div class="note">The free plan allows one device at a time.</div>
+  </div>
+</div>
+<input type="file" id="file" accept=".conf,.txt" multiple hidden>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+let servers=[],selected=null,selConf=null,state="off",tab="us",t0=0,tick=null,isWG=false,listSrc="";
+
+function toast(m,kind){const t=$("toast");t.textContent=m;t.className="toast show"+(kind?" "+kind:"");clearTimeout(t._h);t._h=setTimeout(()=>t.className="toast",4500)}
+const fmt=b=>b<1048576?(b/1024).toFixed(0)+" KB":b<1073741824?(b/1048576).toFixed(1)+" MB":(b/1073741824).toFixed(2)+" GB";
+const flag=cc=>`<img class="flag" src="https://flagcdn.com/w40/${cc}.png" onerror="this.style.visibility='hidden'">`;
+const bars=s=>{const q=s.ping<=0?2:s.ping<60?4:s.ping<150?3:s.ping<300?2:1;return `<div class="sig">${[4,7,10,12].map((h,i)=>`<i style="height:${h}px" class="${i<q?'f':''}"></i>`).join("")}</div>`};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const X='<svg><use href="#i-x"/></svg>';
+
+document.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{tab=b.dataset.t;document.querySelectorAll(".seg button").forEach(x=>x.classList.toggle("on",x===b));
+  $("p-us").classList.toggle("on",tab==="us");$("p-free").classList.toggle("on",tab==="free");});
+
+/* all locations */
+function render(){
+  const c=$("country").value,list=servers.filter(s=>!c||s.cc===c);
+  $("list").innerHTML=list.length?list.map(s=>`<div class="row ${selected&&selected.host===s.host?'sel':''}" data-h="${esc(s.host)}">${flag(s.cc)}
+    <div class="tx"><div class="nm">${esc(s.country)}</div><div class="ds">${s.speed.toFixed(0)} Mbps · ${s.sessions} users</div></div>${bars(s)}<div class="ms">${s.ping>0?s.ping+' ms':'—'}</div></div>`).join("")
+    :`<div class="empty">${servers.length?"No servers in this country right now.":"Loading locations…"}</div>`;
+  document.querySelectorAll("#list .row").forEach(r=>r.onclick=()=>{if(state!=="off")return toast("Disconnect first");selected=servers.find(s=>s.host===r.dataset.h);selConf=null;renderConfs();render();go();});
+}
+function fillCountries(){
+  const map={};servers.forEach(s=>{(map[s.cc]||={n:s.country,c:0}).c++});const cur=$("country").value;
+  $("country").innerHTML=`<option value="">All countries · ${servers.length}</option>`+Object.entries(map).sort((a,b)=>a[1].n.localeCompare(b[1].n)).map(([cc,v])=>`<option value="${cc}">${esc(v.n)} · ${v.c}</option>`).join("");
+  $("country").value=cur;
+}
+const best=()=>{const c=$("country").value;return servers.filter(s=>!c||s.cc===c).sort((a,b)=>b.score-a.score)[0]};
+
+/* my locations */
+async function renderConfs(){
+  let cs=[];try{cs=await confList()||[]}catch(e){}
+  $("confs").innerHTML=cs.length?cs.map(c=>`<div class="row ${selConf===c.name?'sel':''}" data-n="${esc(c.name)}">${flag('us')}
+     <div class="tx"><div class="nm">${esc(c.name)}</div><div class="ds">WireGuard · ${esc(c.endpoint||'')}</div></div><button class="ic" data-del="${esc(c.name)}" title="Remove">${X}</button></div>`).join("")
+    :`<div class="empty">No saved locations yet.<br><button id="addEmpty">Add a US location</button></div>`;
+  const ae=$("addEmpty");if(ae)ae.onclick=openAdd;
+  document.querySelectorAll("#confs .row").forEach(r=>r.onclick=e=>{
+    const d=e.target.closest("[data-del]");
+    if(d){if(confirm("Remove "+d.dataset.del+"?"))confDelete(d.dataset.del).then(renderConfs);return;}
+    if(state!=="off")return toast("Disconnect first");
+    selConf=r.dataset.n;selected=null;render();renderConfs();go();});
+}
+function openAdd(){$("scrim").classList.add("show")}
+$("addBtn").onclick=openAdd;
+$("mClose").onclick=()=>$("scrim").classList.remove("show");
+$("scrim").onclick=e=>{if(e.target===$("scrim"))$("scrim").classList.remove("show")};
+async function importFiles(files){
+  let ok=0;
+  for(const f of files){if(!/\.(conf|txt)$/i.test(f.name))continue;
+    try{selConf=await confImport(f.name,await f.text());ok++}catch(err){toast(String(err),"err")}}
+  if(ok){$("scrim").classList.remove("show");toast("Location added. Select it to connect.","good")}
+  renderConfs();
+}
+$("imp").onclick=()=>$("file").click();
+$("file").onchange=e=>{importFiles([...e.target.files]);e.target.value="";};
+document.addEventListener("dragover",e=>e.preventDefault());
+document.addEventListener("drop",e=>{e.preventDefault();importFiles([...e.dataTransfer.files]);});
+
+/* state */
+function setState(s,sub){
+  state=s;
+  $("power").className="pw"+(s==="on"?" on":s==="wait"?" wait":"");
+  $("disc").classList.toggle("show",s==="on");
+  $("dot").className="dot"+(s==="on"?" on":s==="wait"?" wait":"");
+  $("chip").textContent=s==="on"?"Protected":s==="wait"?"Connecting":"Not protected";
+  $("state").textContent=s==="on"?"Connected":s==="wait"?"Connecting…":"Not connected";
+  if(sub!==undefined)$("sub").innerHTML=sub;
+  clearInterval(tick);
+  if(s==="on"){t0=Date.now();const base=$("sub").innerHTML;tick=setInterval(async()=>{const d=Math.floor((Date.now()-t0)/1000);
+    let extra="";if(isWG){try{const st=await vpnStats();extra=` · ↓ ${fmt(st.rx)}`}catch(e){}}
+    $("sub").innerHTML=`${base} · <span class="timer">${String(Math.floor(d/3600)).padStart(2,"0")}:${String(Math.floor(d%3600/60)).padStart(2,"0")}:${String(d%60).padStart(2,"0")}</span>${extra}`},1000);}
+}
+function disconnect(){if(state!=="on")return;setState("wait","Disconnecting…");vpnDisconnect();}
+function go(){
+  if(state==="wait")return;
+  if(state==="on")return disconnect();
+  window._told=false;
+  if(selConf){isWG=true;setState("wait","Connecting to "+esc(selConf)+"…");vpnConnectWG(selConf);return;}
+  isWG=false;
+  if(tab==="us"&&!selected){setState("wait","Finding a US / Canada server…");vpnConnectUS();return;}
+  if(!servers.length)return toast("Locations are still loading");
+  const s=selected||best();selected=s;render();setState("wait",`Connecting to ${esc(s.country)}…`);vpnConnect(s.host);
+}
+
+window.onVpnEvent=({event,data})=>{
+  if(event==="servers"){servers=data.list||[];listSrc=data.source;
+    $("foot").textContent=`v2.1 · ${servers.length} public servers`+(data.source!=="live"?" (offline list)":"");fillCountries();render();}
+  else if(event==="status")$("sub").textContent=data;
+  else if(event==="connected"){setState("on",esc(data.label));setTimeout(vpnIP,1500);setTimeout(vpnIP,6000);}
+  else if(event==="disconnected"){setState("off","Select a location to connect");setTimeout(vpnIP,800);}
+  else if(event==="ip"){$("ip").textContent=data.query||"—";$("loc").textContent=[data.city,data.country].filter(Boolean).join(", ")||"—";
+    if(state==="on"&&data.countryCode&&!window._told){window._told=true;const us=["US","CA"].includes(data.countryCode);if(us)toast("You're now browsing from "+data.country,"good");}}
+  else if(event==="error"){setState("off","Select a location to connect");toast(data,"err");}
+};
+
+$("power").onclick=go;
+$("disc").onclick=disconnect;
+$("usAuto").onclick=e=>{e.stopPropagation();if(state!=="off")return toast("Disconnect first");selConf=null;selected=null;renderConfs();render();go();};
+$("quick").onclick=()=>$("usAuto").click();
+$("best").onclick=()=>{if(state!=="off")return toast("Disconnect first");selConf=null;selected=best();render();go();};
+$("refresh").onclick=()=>{$("foot").textContent="v2.1 · refreshing…";vpnLoadServers();};
+$("country").onchange=()=>{if(state==="off")selected=null;render();};
+document.addEventListener("keydown",e=>{if(e.key==="Escape")$("scrim").classList.remove("show")});
+
+(async()=>{vpnLoadServers();vpnIP();renderConfs();
+  try{const m=await vpnStatus();if(m){isWG=m==="wg";setState("on","Connected");}}catch(e){}})();
+</script>
+</body>
+</html>
