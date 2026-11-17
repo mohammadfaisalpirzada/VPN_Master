@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>VPN Master</title>
+<style>
+  :root{--bg:#0d1117;--panel:#161b26;--panel2:#1c2231;--line:#252c3d;--line2:#30384c;--txt:#e6e9f0;--mute:#8a93a8;--dim:#5d667b;--ok:#2fd79b;--bad:#f2556d;--acc:#4f7cff;--warn:#f5b84b}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font:14px/1.45 Roboto,system-ui,sans-serif;background:var(--bg);color:var(--txt);user-select:none}
+  svg{display:block} button{font:inherit;color:inherit;border:none;background:none}
+  .app{display:flex;flex-direction:column;min-height:100vh;padding:18px 16px 14px;gap:14px}
+  header{display:flex;align-items:center;justify-content:space-between}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:17px}
+  .logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(140deg,#4f7cff,#2fd79b);display:grid;place-items:center}
+  .ver{font-size:11px;font-weight:600;color:#9db4ff;background:rgba(79,124,255,.14);border:1px solid rgba(79,124,255,.35);padding:1px 8px;border-radius:99px;margin-left:2px}
+  .chip{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mute)}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--dim)} .dot.on{background:var(--ok);box-shadow:0 0 0 3px rgba(47,215,155,.15)} .dot.wait{background:var(--warn)}
+  .hero{display:flex;flex-direction:column;align-items:center;padding:14px 0 4px}
+  .pw{position:relative;width:min(200px,52vw);height:min(200px,52vw);border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 50% 40%,#232a3b,#171c28 70%);border:1px solid var(--line2);transition:.3s}
+  .pw:active{transform:scale(.97)}
+  .pw svg{width:36%;height:36%;color:var(--mute);transition:.3s}
+  .pw.on{border-color:var(--ok);box-shadow:0 0 0 8px rgba(47,215,155,.07),0 0 60px -8px rgba(47,215,155,.45)} .pw.on svg{color:var(--ok)}
+  .pw.wait::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2px solid transparent;border-top-color:var(--warn);animation:spin .9s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .state{margin-top:16px;font-size:21px;font-weight:600}
+  .sub{margin-top:2px;color:var(--mute);font-size:13px;text-align:center;min-height:19px}
+  .timer{color:var(--ok);font-variant-numeric:tabular-nums}
+  .disc{display:none;margin-top:12px;height:38px;padding:0 20px;border-radius:10px;background:rgba(242,85,109,.12);color:#ff8597;font-weight:600;border:1px solid rgba(242,85,109,.35);align-items:center;gap:8px}
+  .disc.show{display:inline-flex}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .cell{background:var(--panel);padding:10px 12px}
+  .cell span{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.6px}
+  .cell b{display:block;font-weight:500;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:3px}
+  .seg button{flex:1;height:36px;border-radius:8px;color:var(--mute);font-weight:500}
+  .seg button.on{background:var(--panel2);color:var(--txt);box-shadow:inset 0 0 0 1px var(--line2)}
+  .panel{display:none;flex-direction:column;gap:10px}.panel.on{display:flex}
+  .label{font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.7px;display:flex;justify-content:space-between;align-items:center}
+  .label button{color:var(--acc);text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;display:flex;align-items:center;gap:4px}
+  .list{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .row{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:none} .row.sel{background:#1a2338}
+  .flag{width:24px;height:17px;border-radius:3px;object-fit:cover;flex:none;background:var(--line2)}
+  .tx{flex:1;min-width:0} .nm{font-weight:500} .ds{font-size:12px;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ic{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:var(--dim)} .ic svg{width:15px;height:15px}
+  .empty{padding:20px 14px;text-align:center;color:var(--mute);font-size:13px} .empty button{color:var(--acc);font-weight:600;margin-top:4px}
+  .desc{color:var(--mute);font-size:13px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  footer{margin-top:auto;display:flex;justify-content:space-between;font-size:11.5px;color:var(--dim)}
+  .scrim{position:fixed;inset:0;background:rgba(5,8,14,.72);display:none;align-items:flex-end;z-index:20}
+  .scrim.show{display:flex}
+  .sheet{width:100%;max-height:90vh;overflow:auto;background:var(--panel);border-top:1px solid var(--line2);border-radius:18px 18px 0 0;padding:18px 18px 24px}
+  .mh{display:flex;justify-content:space-between;align-items:flex-start} .mh h3{font-size:17px;font-weight:600}
+  .mp{color:var(--mute);font-size:13px;margin:4px 0 12px}
+  .step{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+  .num{width:26px;height:26px;border-radius:50%;background:var(--panel2);border:1px solid var(--line2);display:grid;place-items:center;font-size:12px;font-weight:600;flex:none;color:var(--mute)}
+  .st{flex:1} .st b{font-weight:600;display:block} .st small{color:var(--mute);font-size:12.5px;display:block;margin:2px 0 9px}
+  .btn{height:38px;padding:0 14px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);display:inline-flex;align-items:center;gap:7px;font-weight:500}
+  .btn svg{width:15px;height:15px} .btn.pri{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+  .note{font-size:12px;color:var(--dim);border-top:1px solid var(--line);padding-top:10px}
+  .toast{position:fixed;left:16px;right:16px;bottom:24px;opacity:0;transform:translateY(12px);transition:.25s;pointer-events:none;z-index:30;
+         background:#1f2636;border:1px solid var(--line2);padding:11px 14px;border-radius:12px;font-size:13px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+  .toast.show{opacity:1;transform:none} .toast.err{border-color:rgba(242,85,109,.5);color:#ffb3bf} .toast.good{border-color:rgba(47,215,155,.5);color:#b6f5dc}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7z"/><path d="M14 3v4h4"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="#fff"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z" opacity=".95"/><path d="M8.5 12.5l2.3 2.3 4.7-5" stroke="#4f7cff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+<div class="app">
+  <header>
+    <div class="brand"><div class="logo"><svg width="17" height="17"><use href="#i-shield"/></svg></div>VPN Master<span class="ver" id="ver"></span></div>
+    <div class="chip"><span class="dot" id="dot"></span><span id="chip">Not protected</span></div>
+  </header>
+
+  <div class="hero">
+    <button class="pw" id="power"><svg><use href="#i-power"/></svg></button>
+    <div class="state" id="state">Not connected</div>
+    <div class="sub" id="sub">Select a location to connect</div>
+    <button class="disc" id="disc"><svg width="11" height="11"><use href="#i-stop"/></svg><span id="discTxt">Disconnect</span></button>
+  </div>
+
+  <div class="grid">
+    <div class="cell"><span>IP address</span><b id="ip">—</b></div>
+    <div class="cell"><span>Location</span><b id="loc">—</b></div>
+    <div class="cell"><span>Downloaded</span><b id="rx">0 KB</b></div>
+    <div class="cell"><span>Uploaded</span><b id="tx">0 KB</b></div>
+  </div>
+
+  <div class="seg"><button class="on" data-t="us">United States</button><button data-t="warp">Fast (WARP)</button></div>
+
+  <div class="panel on" id="p-us">
+    <div class="label">My locations <button id="addBtn"><svg width="13" height="13"><use href="#i-plus"/></svg>Add location</button></div>
+    <div class="list" id="confs"></div>
+  </div>
+  <div class="panel" id="p-warp">
+    <div class="desc">Cloudflare WARP — fast and encrypted, no account needed. Connects to the nearest Cloudflare location, so your country stays the same.</div>
+  </div>
+
+  <footer><span>The Master Sahib</span><span onclick="Android.open('https://themastersahib.com')">themastersahib.com</span></footer>
+</div>
+
+<div class="scrim" id="scrim"><div class="sheet">
+  <div class="mh"><h3>Add a US location</h3><button class="ic" id="mClose"><svg><use href="#i-x"/></svg></button></div>
+  <div class="mp">Use a free Proton VPN server for a stable US connection. One-time setup.</div>
+  <div class="step"><div class="num">1</div><div class="st"><b>Create a free account</b><small>Email sign-up, unlimited data.</small>
+    <button class="btn" onclick="Android.open('https://account.protonvpn.com/signup')"><svg><use href="#i-ext"/></svg>Open Proton VPN</button></div></div>
+  <div class="step"><div class="num">2</div><div class="st"><b>Download a WireGuard file</b><small>Downloads → WireGuard configuration → Android → choose a US-FREE server → Create.</small>
+    <button class="btn" onclick="Android.open('https://account.protonvpn.com/downloads')"><svg><use href="#i-ext"/></svg>Open downloads</button></div></div>
+  <div class="step"><div class="num">3</div><div class="st"><b>Import the file</b><small>Pick the downloaded .conf file.</small>
+    <button class="btn pri" onclick="Android.importConf()"><svg><use href="#i-file"/></svg>Choose file…</button></div></div>
+  <div class="note">The free plan allows one device at a time.</div>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+let state="off",tab="us",selConf=null,t0=0,tick=null,statTick=null,label="";
+const fmt=b=>b<1048576?(b/1024).toFixed(0)+" KB":b<1073741824?(b/1048576).toFixed(1)+" MB":(b/1073741824).toFixed(2)+" GB";
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function toast(m,k){const t=$("toast");t.textContent=m;t.className="toast show"+(k?" "+k:"");clearTimeout(t._h);t._h=setTimeout(()=>t.className="toast",4500)}
+
+document.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{tab=b.dataset.t;document.querySelectorAll(".seg button").forEach(x=>x.classList.toggle("on",x===b));
+  $("p-us").classList.toggle("on",tab==="us");$("p-warp").classList.toggle("on",tab==="warp");});
+
+function renderConfs(){
+  const cs=JSON.parse(Android.confList());if(selConf&&!cs.includes(selConf))selConf=null;if(!selConf&&cs.length)selConf=cs[0];
+  $("confs").innerHTML=cs.length?cs.map(n=>`<div class="row ${n===selConf?'sel':''}" data-n="${esc(n)}"><img class="flag" src="https://flagcdn.com/w40/us.png" onerror="this.style.visibility='hidden'">
+    <div class="tx"><div class="nm">${esc(n)}</div><div class="ds">WireGuard</div></div><button class="ic" data-d="${esc(n)}"><svg><use href="#i-x"/></svg></button></div>`).join("")
+    :`<div class="empty">No saved locations yet.<br><button id="addEmpty">Add a US location</button></div>`;
+  const ae=$("addEmpty");if(ae)ae.onclick=openAdd;
+  document.querySelectorAll("#confs .row").forEach(r=>r.onclick=e=>{const d=e.target.closest("[data-d]");
+    if(d){Android.confDelete(d.dataset.d);renderConfs();return;}selConf=r.dataset.n;renderConfs();});
+}
+function openAdd(){$("scrim").classList.add("show")}
+$("addBtn").onclick=openAdd;$("mClose").onclick=()=>$("scrim").classList.remove("show");
+$("scrim").onclick=e=>{if(e.target===$("scrim"))$("scrim").classList.remove("show")};
+
+function setState(s,sub){
+  state=s;$("power").className="pw"+(s==="on"?" on":s==="wait"?" wait":"");$("disc").classList.toggle("show",s!=="off");$("discTxt").textContent=s==="on"?"Disconnect":"Cancel";
+  $("dot").className="dot"+(s==="on"?" on":s==="wait"?" wait":"");$("chip").textContent=s==="on"?"Protected":s==="wait"?"Connecting":"Not protected";
+  $("state").textContent=s==="on"?"Connected":s==="wait"?"Connecting…":"Not connected";
+  if(sub!==undefined)$("sub").innerHTML=sub;
+  clearInterval(tick);clearInterval(statTick);
+  if(s==="on"){t0=Date.now();
+    tick=setInterval(()=>{const d=Math.floor((Date.now()-t0)/1000);$("sub").innerHTML=`${esc(label||"Connected")} · <span class="timer">${String(Math.floor(d/3600)).padStart(2,"0")}:${String(Math.floor(d%3600/60)).padStart(2,"0")}:${String(d%60).padStart(2,"0")}</span>`},1000);
+    statTick=setInterval(()=>{try{const s=JSON.parse(Android.stats());$("rx").textContent=fmt(s.rx);$("tx").textContent=fmt(s.tx)}catch(e){}},1000);}
+}
+function disconnect(){if(state==="off")return;Android.disconnect();setState("off","Select a location to connect");}
+
+window.onVpnEvent=({event,data})=>{
+  if(event==="status"){if(state==="wait")$("sub").textContent=data;}
+  else if(event==="imported"){selConf=data;$("scrim").classList.remove("show");renderConfs();toast("Location added. Tap the power button to connect.","good");}
+  else if(event==="connected"){if(state==="off"){Android.disconnect();return;}label=(data&&data.label)||"";window._told=false;setState("on");setTimeout(()=>Android.ip(),1200);setTimeout(()=>Android.ip(),6000);}
+  else if(event==="disconnected"){if(state!=="off")setState("off","Select a location to connect");setTimeout(()=>Android.ip(),800);}
+  else if(event==="ip"){$("ip").textContent=data.query||"—";$("loc").textContent=[data.city,data.country].filter(Boolean).join(", ")||"—";
+    if(state==="on"&&!window._told&&["US","CA"].includes(data.countryCode)){window._told=true;toast("You're now browsing from "+data.country,"good");}}
+  else if(event==="error"){if(state==="off")return;setState("off","Select a location to connect");toast(data,"err");}
+};
+
+$("power").onclick=()=>{
+  if(state!=="off")return disconnect();
+  if(tab==="us"){if(!selConf){openAdd();return;}setState("wait","Connecting to "+esc(selConf)+"…");Android.connectConf(selConf);}
+  else{setState("wait","Connecting…");Android.connect();}
+};
+$("disc").onclick=disconnect;
+
+try{const v=Android.version();if(v)$("ver").textContent="v"+v}catch(e){}
+renderConfs();
+if(Android.isConnected()){label="Connected";setState("on");}
+Android.ip();
+</script>
+</body>
+</html>

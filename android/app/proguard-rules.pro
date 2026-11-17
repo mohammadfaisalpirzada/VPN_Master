@@ -1,0 +1,4 @@
+-keep class com.wireguard.** { *; }
+-keep class com.themastersahib.vpnmaster.Bridge { *; }
+-keepattributes JavascriptInterface
+-dontwarn javax.annotation.**
