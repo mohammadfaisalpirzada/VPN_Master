@@ -134,7 +134,7 @@
       <div class="state" id="state">Not connected</div>
       <div class="sub" id="sub">Select a location to connect</div>
       <div class="meta"><span>IP address</span><b id="ip">—</b><span>Location</span><b id="loc">—</b></div>
-      <button class="disc" id="disc"><svg width="10" height="10"><use href="#i-stop"/></svg>Disconnect</button>
+      <button class="disc" id="disc"><svg width="10" height="10"><use href="#i-stop"/></svg><span id="discTxt">Disconnect</span></button>
     </div>
   </div>
 
@@ -168,7 +168,7 @@
   </div>
 
   <footer>
-    <span id="foot">v2.1</span>
+    <span id="foot">v2.2</span>
     <button onclick="openURL('https://themastersahib.com')">themastersahib.com</button>
   </footer>
 </div>
@@ -252,7 +252,7 @@ document.addEventListener("drop",e=>{e.preventDefault();importFiles([...e.dataTr
 function setState(s,sub){
   state=s;
   $("power").className="pw"+(s==="on"?" on":s==="wait"?" wait":"");
-  $("disc").classList.toggle("show",s==="on");
+  $("disc").classList.toggle("show",s!=="off");$("discTxt").textContent=s==="on"?"Disconnect":"Cancel";
   $("dot").className="dot"+(s==="on"?" on":s==="wait"?" wait":"");
   $("chip").textContent=s==="on"?"Protected":s==="wait"?"Connecting":"Not protected";
   $("state").textContent=s==="on"?"Connected":s==="wait"?"Connecting…":"Not connected";
@@ -262,10 +262,9 @@ function setState(s,sub){
     let extra="";if(isWG){try{const st=await vpnStats();extra=` · ↓ ${fmt(st.rx)}`}catch(e){}}
     $("sub").innerHTML=`${base} · <span class="timer">${String(Math.floor(d/3600)).padStart(2,"0")}:${String(Math.floor(d%3600/60)).padStart(2,"0")}:${String(d%60).padStart(2,"0")}</span>${extra}`},1000);}
 }
-function disconnect(){if(state!=="on")return;setState("wait","Disconnecting…");vpnDisconnect();}
+function disconnect(){if(state==="off")return;vpnDisconnect();setState("off","Select a location to connect");}
 function go(){
-  if(state==="wait")return;
-  if(state==="on")return disconnect();
+  if(state!=="off")return disconnect();
   window._told=false;
   if(selConf){isWG=true;setState("wait","Connecting to "+esc(selConf)+"…");vpnConnectWG(selConf);return;}
   isWG=false;
@@ -276,13 +275,13 @@ function go(){
 
 window.onVpnEvent=({event,data})=>{
   if(event==="servers"){servers=data.list||[];listSrc=data.source;
-    $("foot").textContent=`v2.1 · ${servers.length} public servers`+(data.source!=="live"?" (offline list)":"");fillCountries();render();}
-  else if(event==="status")$("sub").textContent=data;
-  else if(event==="connected"){setState("on",esc(data.label));setTimeout(vpnIP,1500);setTimeout(vpnIP,6000);}
-  else if(event==="disconnected"){setState("off","Select a location to connect");setTimeout(vpnIP,800);}
+    $("foot").textContent=`v2.2 · ${servers.length} public servers`+(data.source!=="live"?" (offline list)":"");fillCountries();render();}
+  else if(event==="status"){if(state==="wait")$("sub").textContent=data;}
+  else if(event==="connected"){if(state==="off"){vpnDisconnect();return;}setState("on",esc(data.label));setTimeout(vpnIP,1500);setTimeout(vpnIP,6000);}
+  else if(event==="disconnected"){if(state!=="off")setState("off","Select a location to connect");setTimeout(vpnIP,800);}
   else if(event==="ip"){$("ip").textContent=data.query||"—";$("loc").textContent=[data.city,data.country].filter(Boolean).join(", ")||"—";
     if(state==="on"&&data.countryCode&&!window._told){window._told=true;const us=["US","CA"].includes(data.countryCode);if(us)toast("You're now browsing from "+data.country,"good");}}
-  else if(event==="error"){setState("off","Select a location to connect");toast(data,"err");}
+  else if(event==="error"){if(state==="off")return;setState("off","Select a location to connect");toast(data,"err");}
 };
 
 $("power").onclick=go;
@@ -290,7 +289,7 @@ $("disc").onclick=disconnect;
 $("usAuto").onclick=e=>{e.stopPropagation();if(state!=="off")return toast("Disconnect first");selConf=null;selected=null;renderConfs();render();go();};
 $("quick").onclick=()=>$("usAuto").click();
 $("best").onclick=()=>{if(state!=="off")return toast("Disconnect first");selConf=null;selected=best();render();go();};
-$("refresh").onclick=()=>{$("foot").textContent="v2.1 · refreshing…";vpnLoadServers();};
+$("refresh").onclick=()=>{$("foot").textContent="v2.2 · refreshing…";vpnLoadServers();};
 $("country").onchange=()=>{if(state==="off")selected=null;render();};
 document.addEventListener("keydown",e=>{if(e.key==="Escape")$("scrim").classList.remove("show")});
 

@@ -9,6 +9,8 @@
 package main
 
 import (
+	"context"
+	"sync/atomic"
 	_ "embed"
 	"encoding/base64"
 	"encoding/csv"
@@ -72,11 +74,37 @@ var (
 
 // ---------------- helpers ----------------
 
-func run(name string, args ...string) (string, error) {
-	cmd := exec.Command(name, args...)
+var (
+	cancelReq atomic.Bool // set by Disconnect/Cancel; checked by every connect step
+	cmdMu     sync.Mutex
+	curCancel context.CancelFunc
+)
+
+// runT runs a command (no console window) with a hard time limit. Cancel kills it at once.
+func runT(limit time.Duration, name string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
+	cmdMu.Lock()
+	curCancel = cancel
+	cmdMu.Unlock()
+	defer cancel()
+	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: createNoWnd}
 	out, err := cmd.CombinedOutput()
+	if ctx.Err() == context.DeadlineExceeded {
+		err = errors.New("timed out")
+	}
 	return strings.TrimSpace(string(out)), err
+}
+
+func run(name string, args ...string) (string, error) { return runT(20*time.Second, name, args...) }
+
+// killCurrent stops whatever connect command is running right now.
+func killCurrent() {
+	cmdMu.Lock()
+	if curCancel != nil {
+		curCancel()
+	}
+	cmdMu.Unlock()
 }
 
 func ps(script string) (string, error) {
@@ -84,7 +112,7 @@ func ps(script string) (string, error) {
 	for _, r := range script {
 		u = append(u, byte(r), byte(r>>8))
 	}
-	return run("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+	return runT(25*time.Second, "powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
 		"-EncodedCommand", base64.StdEncoding.EncodeToString(u))
 }
 
@@ -213,7 +241,7 @@ func removeConn() {
 }
 
 func dial() error {
-	out, err := run("rasdial", connName, vpnUser, vpnPass)
+	out, err := runT(25*time.Second, "rasdial", connName, vpnUser, vpnPass)
 	if err != nil {
 		return errors.New(out)
 	}
@@ -221,6 +249,9 @@ func dial() error {
 }
 
 func tryVPNGate(s Server) (string, bool) {
+	if cancelReq.Load() {
+		return "", false
+	}
 	removeConn()
 	fqdn := s.Host + ".opengw.net"
 	if _, err := ps(fmt.Sprintf(`Add-VpnConnection -Name '%s' -ServerAddress '%s' -TunnelType Sstp -EncryptionLevel Optional -AuthenticationMethod MSChapv2 -RememberCredential -Force -ErrorAction Stop`, connName, fqdn)); err == nil {
@@ -229,6 +260,9 @@ func tryVPNGate(s Server) (string, bool) {
 		}
 	}
 	removeConn()
+	if cancelReq.Load() {
+		return "", false
+	}
 	if _, err := ps(fmt.Sprintf(`Add-VpnConnection -Name '%s' -ServerAddress '%s' -TunnelType L2tp -L2tpPsk '%s' -EncryptionLevel Optional -AuthenticationMethod MSChapv2,Pap -RememberCredential -Force -ErrorAction Stop`, connName, s.IP, l2tpPSK)); err == nil {
 		if dial() == nil {
 			return "L2TP/IPsec", true
@@ -248,9 +282,20 @@ func disconnectAll() {
 	mode = ""
 }
 
+// connectedOrAbort reports success unless the user pressed Cancel meanwhile.
+func connectedOrAbort(label, cc string) {
+	if cancelReq.Load() {
+		disconnectAll()
+		emit("disconnected", nil)
+		return
+	}
+	emit("connected", map[string]string{"label": label, "cc": cc})
+}
+
 func connectServer(host string) {
 	busy.Lock()
 	defer busy.Unlock()
+	cancelReq.Store(false)
 	disconnectAll()
 	srvMu.Lock()
 	var s *Server
@@ -267,7 +312,10 @@ func connectServer(host string) {
 	emit("status", "Connecting to "+s.Country+"…")
 	if proto, ok := tryVPNGate(*s); ok {
 		mode = "ras"
-		emit("connected", map[string]string{"label": s.Country + " · " + proto, "cc": s.CC})
+		connectedOrAbort(s.Country+" · "+proto, s.CC)
+		return
+	}
+	if cancelReq.Load() {
 		return
 	}
 	emit("error", "This server refused. Pick another one (or press ⚡ Best).")
@@ -277,6 +325,7 @@ func connectServer(host string) {
 func connectUSAuto() {
 	busy.Lock()
 	defer busy.Unlock()
+	cancelReq.Store(false)
 	disconnectAll()
 	srvMu.Lock()
 	var pool []Server
@@ -292,13 +341,22 @@ func connectUSAuto() {
 		emit("error", "No free US/Canada server is online right now. Use a free Proton VPN config (button below) — it always has US servers.")
 		return
 	}
+	if len(pool) > 5 {
+		pool = pool[:5] // keep the wait short
+	}
 	for i, s := range pool {
+		if cancelReq.Load() {
+			return
+		}
 		emit("status", fmt.Sprintf("Trying %s server %d of %d…", s.Country, i+1, len(pool)))
 		if proto, ok := tryVPNGate(s); ok {
 			mode = "ras"
-			emit("connected", map[string]string{"label": s.Country + " · " + proto, "cc": s.CC})
+			connectedOrAbort(s.Country+" · "+proto, s.CC)
 			return
 		}
+	}
+	if cancelReq.Load() {
+		return
 	}
 	emit("error", "Free US/Canada servers are busy. Import a free Proton VPN US config — it's the reliable option.")
 }
@@ -345,6 +403,7 @@ func importConf(name, text string) (string, error) {
 func connectWG(name string) {
 	busy.Lock()
 	defer busy.Unlock()
+	cancelReq.Store(false)
 	disconnectAll()
 	path := filepath.Join(confDir(), filepath.Base(name)+".conf")
 	if _, err := os.Stat(path); err != nil {
@@ -360,6 +419,11 @@ func connectWG(name string) {
 	deadline := time.Now().Add(25 * time.Second)
 	for time.Now().Before(deadline) {
 		time.Sleep(500 * time.Millisecond)
+		if cancelReq.Load() {
+			stopEngine()
+			mode = ""
+			return
+		}
 		s := readStatus()
 		switch {
 		case s.State == "error":
@@ -367,7 +431,7 @@ func connectWG(name string) {
 			emit("error", "WireGuard: "+s.Error)
 			return
 		case s.State == "up" && s.Handshake > 0:
-			emit("connected", map[string]string{"label": name + " · WireGuard", "cc": "us"})
+			connectedOrAbort(name+" · WireGuard", "us")
 			return
 		case s.State == "up":
 			emit("status", "Waiting for server handshake…")
@@ -455,11 +519,15 @@ func main() {
 	w.Bind("vpnConnect", func(host string) { go connectServer(host) })
 	w.Bind("vpnConnectUS", func() { go connectUSAuto() })
 	w.Bind("vpnConnectWG", func(name string) { go connectWG(name) })
+	// Disconnect / Cancel works at any moment, even in the middle of connecting.
 	w.Bind("vpnDisconnect", func() {
+		cancelReq.Store(true)
+		killCurrent()
 		go func() {
-			busy.Lock()
-			disconnectAll()
-			busy.Unlock()
+			run("rasdial", connName, "/disconnect")
+			stopEngine()
+			removeConn()
+			mode = ""
 			emit("disconnected", nil)
 		}()
 	})

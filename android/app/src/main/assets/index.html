@@ -82,7 +82,7 @@
     <button class="pw" id="power"><svg><use href="#i-power"/></svg></button>
     <div class="state" id="state">Not connected</div>
     <div class="sub" id="sub">Select a location to connect</div>
-    <button class="disc" id="disc"><svg width="11" height="11"><use href="#i-stop"/></svg>Disconnect</button>
+    <button class="disc" id="disc"><svg width="11" height="11"><use href="#i-stop"/></svg><span id="discTxt">Disconnect</span></button>
   </div>
 
   <div class="grid">
@@ -102,7 +102,7 @@
     <div class="desc">Cloudflare WARP — fast and encrypted, no account needed. Connects to the nearest Cloudflare location, so your country stays the same.</div>
   </div>
 
-  <footer><span>v2.1</span><span onclick="Android.open('https://themastersahib.com')">themastersahib.com</span></footer>
+  <footer><span>v2.2</span><span onclick="Android.open('https://themastersahib.com')">themastersahib.com</span></footer>
 </div>
 
 <div class="scrim" id="scrim"><div class="sheet">
@@ -142,7 +142,7 @@ $("addBtn").onclick=openAdd;$("mClose").onclick=()=>$("scrim").classList.remove(
 $("scrim").onclick=e=>{if(e.target===$("scrim"))$("scrim").classList.remove("show")};
 
 function setState(s,sub){
-  state=s;$("power").className="pw"+(s==="on"?" on":s==="wait"?" wait":"");$("disc").classList.toggle("show",s==="on");
+  state=s;$("power").className="pw"+(s==="on"?" on":s==="wait"?" wait":"");$("disc").classList.toggle("show",s!=="off");$("discTxt").textContent=s==="on"?"Disconnect":"Cancel";
   $("dot").className="dot"+(s==="on"?" on":s==="wait"?" wait":"");$("chip").textContent=s==="on"?"Protected":s==="wait"?"Connecting":"Not protected";
   $("state").textContent=s==="on"?"Connected":s==="wait"?"Connecting…":"Not connected";
   if(sub!==undefined)$("sub").innerHTML=sub;
@@ -151,21 +151,20 @@ function setState(s,sub){
     tick=setInterval(()=>{const d=Math.floor((Date.now()-t0)/1000);$("sub").innerHTML=`${esc(label||"Connected")} · <span class="timer">${String(Math.floor(d/3600)).padStart(2,"0")}:${String(Math.floor(d%3600/60)).padStart(2,"0")}:${String(d%60).padStart(2,"0")}</span>`},1000);
     statTick=setInterval(()=>{try{const s=JSON.parse(Android.stats());$("rx").textContent=fmt(s.rx);$("tx").textContent=fmt(s.tx)}catch(e){}},1000);}
 }
-function disconnect(){if(state!=="on")return;setState("wait","Disconnecting…");Android.disconnect();}
+function disconnect(){if(state==="off")return;Android.disconnect();setState("off","Select a location to connect");}
 
 window.onVpnEvent=({event,data})=>{
-  if(event==="status")$("sub").textContent=data;
+  if(event==="status"){if(state==="wait")$("sub").textContent=data;}
   else if(event==="imported"){selConf=data;$("scrim").classList.remove("show");renderConfs();toast("Location added. Tap the power button to connect.","good");}
-  else if(event==="connected"){label=(data&&data.label)||"";window._told=false;setState("on");setTimeout(()=>Android.ip(),1200);setTimeout(()=>Android.ip(),6000);}
-  else if(event==="disconnected"){setState("off","Select a location to connect");setTimeout(()=>Android.ip(),800);}
+  else if(event==="connected"){if(state==="off"){Android.disconnect();return;}label=(data&&data.label)||"";window._told=false;setState("on");setTimeout(()=>Android.ip(),1200);setTimeout(()=>Android.ip(),6000);}
+  else if(event==="disconnected"){if(state!=="off")setState("off","Select a location to connect");setTimeout(()=>Android.ip(),800);}
   else if(event==="ip"){$("ip").textContent=data.query||"—";$("loc").textContent=[data.city,data.country].filter(Boolean).join(", ")||"—";
     if(state==="on"&&!window._told&&["US","CA"].includes(data.countryCode)){window._told=true;toast("You're now browsing from "+data.country,"good");}}
-  else if(event==="error"){setState("off","Select a location to connect");toast(data,"err");}
+  else if(event==="error"){if(state==="off")return;setState("off","Select a location to connect");toast(data,"err");}
 };
 
 $("power").onclick=()=>{
-  if(state==="wait")return;
-  if(state==="on")return disconnect();
+  if(state!=="off")return disconnect();
   if(tab==="us"){if(!selConf){openAdd();return;}setState("wait","Connecting to "+esc(selConf)+"…");Android.connectConf(selConf);}
   else{setState("wait","Connecting…");Android.connect();}
 };

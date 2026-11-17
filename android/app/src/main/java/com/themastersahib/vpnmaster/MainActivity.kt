@@ -26,6 +26,7 @@ class MainActivity : Activity() {
     private val reqFile = 43
     private var pendingConf: String? = null
     @Volatile private var connecting = false
+    @Volatile private var cancelled = false
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -96,6 +97,7 @@ class MainActivity : Activity() {
 
     private fun startTunnel() = thread {
         connecting = true
+        cancelled = false
         val confName = pendingConf
         try {
             if (confName != null) {
@@ -106,12 +108,14 @@ class MainActivity : Activity() {
                 poke()
                 val t0 = System.currentTimeMillis()
                 while (System.currentTimeMillis() - t0 < 12000) {
+                    if (cancelled) return@thread
                     if (app.handshakeAt() > 0) {
                         emit("connected", JSONObject().put("label", "$confName · WireGuard"))
                         return@thread
                     }
                     Thread.sleep(400)
                 }
+                if (cancelled) return@thread
                 app.backend.setState(app.tunnel, Tunnel.State.DOWN, null)
                 emit("error", "Server did not answer. Config may be expired, or your free account is connected on another device (Proton Free = 1 device).")
                 return@thread
@@ -119,12 +123,14 @@ class MainActivity : Activity() {
             emit("status", "Getting free WARP key…")
             var acc = app.account()
             for ((i, ep) in app.endpoints(acc).withIndex()) {
+                if (cancelled) return@thread
                 emit("status", "Connecting… (route ${i + 1})")
                 app.backend.setState(app.tunnel, Tunnel.State.UP, app.buildConfig(acc, ep))
                 app.endpoint = ep
                 poke()
                 val t0 = System.currentTimeMillis()
                 while (System.currentTimeMillis() - t0 < 6000) {
+                    if (cancelled) return@thread
                     if (app.handshakeAt() > 0) {
                         emit("connected", JSONObject().put("label", "WARP · WireGuard"))
                         return@thread
@@ -134,11 +140,12 @@ class MainActivity : Activity() {
                 // Key may have been revoked by Cloudflare — re-register once and keep going.
                 if (i == 1) acc = app.account(forceNew = true)
             }
+            if (cancelled) return@thread
             app.backend.setState(app.tunnel, Tunnel.State.DOWN, null)
             emit("error", "Your network is blocking WARP right now. Try Wi-Fi / mobile data and tap again.")
         } catch (e: Exception) {
             try { app.backend.setState(app.tunnel, Tunnel.State.DOWN, null) } catch (_: Exception) {}
-            emit("error", e.message ?: "Connection failed")
+            if (!cancelled) emit("error", e.message ?: "Connection failed")
         } finally { connecting = false }
     }
 
@@ -149,6 +156,7 @@ class MainActivity : Activity() {
     }
 
     fun stopTunnel() = thread {
+        cancelled = true
         try { app.backend.setState(app.tunnel, Tunnel.State.DOWN, null) } catch (_: Exception) {}
         emit("disconnected", null)
     }
