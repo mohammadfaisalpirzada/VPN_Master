@@ -180,6 +180,8 @@ class Bridge(private val a: MainActivity) {
     @JavascriptInterface fun disconnect() { a.stopTunnel() }
     @JavascriptInterface fun isConnected(): Boolean = App.instance.state == Tunnel.State.UP
     @JavascriptInterface fun ip() { a.ipInfo() }
+    @JavascriptInterface fun version(): String =
+        try { a.packageManager.getPackageInfo(a.packageName, 0).versionName ?: "" } catch (_: Exception) { "" }
     @JavascriptInterface fun stats(): String {
         val (rx, tx) = App.instance.traffic()
         return JSONObject().put("rx", rx).put("tx", tx).put("endpoint", App.instance.endpoint).toString()

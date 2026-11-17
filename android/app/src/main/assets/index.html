@@ -13,6 +13,7 @@
   header{display:flex;align-items:center;justify-content:space-between}
   .brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:17px}
   .logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(140deg,#4f7cff,#2fd79b);display:grid;place-items:center}
+  .ver{font-size:11px;font-weight:600;color:#9db4ff;background:rgba(79,124,255,.14);border:1px solid rgba(79,124,255,.35);padding:1px 8px;border-radius:99px;margin-left:2px}
   .chip{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mute)}
   .dot{width:7px;height:7px;border-radius:50%;background:var(--dim)} .dot.on{background:var(--ok);box-shadow:0 0 0 3px rgba(47,215,155,.15)} .dot.wait{background:var(--warn)}
   .hero{display:flex;flex-direction:column;align-items:center;padding:14px 0 4px}
@@ -74,7 +75,7 @@
 </svg>
 <div class="app">
   <header>
-    <div class="brand"><div class="logo"><svg width="17" height="17"><use href="#i-shield"/></svg></div>VPN Master</div>
+    <div class="brand"><div class="logo"><svg width="17" height="17"><use href="#i-shield"/></svg></div>VPN Master<span class="ver" id="ver"></span></div>
     <div class="chip"><span class="dot" id="dot"></span><span id="chip">Not protected</span></div>
   </header>
 
@@ -102,7 +103,7 @@
     <div class="desc">Cloudflare WARP — fast and encrypted, no account needed. Connects to the nearest Cloudflare location, so your country stays the same.</div>
   </div>
 
-  <footer><span>v2.2</span><span onclick="Android.open('https://themastersahib.com')">themastersahib.com</span></footer>
+  <footer><span>The Master Sahib</span><span onclick="Android.open('https://themastersahib.com')">themastersahib.com</span></footer>
 </div>
 
 <div class="scrim" id="scrim"><div class="sheet">
@@ -170,6 +171,7 @@ $("power").onclick=()=>{
 };
 $("disc").onclick=disconnect;
 
+try{const v=Android.version();if(v)$("ver").textContent="v"+v}catch(e){}
 renderConfs();
 if(Android.isConnected()){label="Connected";setState("on");}
 Android.ip();

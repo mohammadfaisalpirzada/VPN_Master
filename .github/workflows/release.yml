@@ -1,0 +1,138 @@
+# Builds VPNMaster.exe (Windows) and VPNMaster.apk (Android) and publishes them
+# as a GitHub Release. Trigger: push a tag like v2.3.0  (git tag v2.3.0 && git push origin v2.3.0)
+# Permanent download links (always the newest release):
+#   https://github.com/mohammadfaisalpirzada/VPN_Master/releases/latest/download/VPNMaster.exe
+#   https://github.com/mohammadfaisalpirzada/VPN_Master/releases/latest/download/VPNMaster.apk
+name: Build & Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g. 2.3.0) — used only for manual runs'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      ver: ${{ steps.v.outputs.ver }}
+      code: ${{ steps.v.outputs.code }}
+    steps:
+      - id: v
+        run: |
+          RAW="${{ github.event.inputs.version || github.ref_name }}"
+          VER="${RAW#v}"
+          IFS=. read -r MA MI PA <<< "$VER"
+          CODE=$(( ${MA:-0}*10000 + ${MI:-0}*100 + ${PA:-0} ))
+          echo "ver=$VER"   >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "Building version $VER (Android versionCode $CODE)"
+
+  windows:
+    needs: version
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: windows } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: windows/go.mod
+          cache-dependency-path: windows/go.sum
+      - name: Stamp version into Windows resources
+        run: |
+          V4="${{ needs.version.outputs.ver }}.0"
+          jq --arg v "$V4" --arg s "${{ needs.version.outputs.ver }}" '
+            .RT_MANIFEST["#1"]["0409"].identity.version = $v |
+            .RT_VERSION["#1"]["0000"].fixed.file_version = $v |
+            .RT_VERSION["#1"]["0000"].fixed.product_version = $v |
+            .RT_VERSION["#1"]["0000"].info["0409"].ProductVersion = $s |
+            .RT_VERSION["#1"]["0000"].info["0409"].FileVersion = $s' winres/winres.json > winres/tmp.json
+          mv winres/tmp.json winres/winres.json
+      - name: Build VPNMaster.exe
+        run: |
+          go install github.com/tc-hib/go-winres@latest
+          "$(go env GOPATH)/bin/go-winres" make --arch amd64
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath \
+            -ldflags "-s -w -H windowsgui -X main.version=${{ needs.version.outputs.ver }}" -o VPNMaster.exe .
+      - uses: actions/upload-artifact@v4
+        with: { name: exe, path: windows/VPNMaster.exe }
+
+  android:
+    needs: version
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: android } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: '8.14.3' }
+      - name: Restore signing key
+        id: key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::warning::Android signing secrets are not set — skipping the APK (see README → Releases)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+          echo "$KEYSTORE_B64" | base64 -d > vpnmaster.keystore
+          printf 'storeFile=vpnmaster.keystore\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$STORE_PASS" "$KEY_ALIAS" "$KEY_PASS" > keystore.properties
+      - name: Build VPNMaster.apk
+        if: steps.key.outputs.ok == 'true'
+        env:
+          APP_VERSION: ${{ needs.version.outputs.ver }}
+          VERSION_CODE: ${{ needs.version.outputs.code }}
+        run: |
+          gradle assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk VPNMaster.apk
+          "$ANDROID_HOME"/build-tools/*/apksigner verify VPNMaster.apk 2>/dev/null || true
+          rm -f vpnmaster.keystore keystore.properties
+      - uses: actions/upload-artifact@v4
+        if: steps.key.outputs.ok == 'true'
+        with: { name: apk, path: android/VPNMaster.apk }
+
+  release:
+    needs: [version, windows, android]
+    if: always() && needs.windows.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: out, merge-multiple: true }
+      - name: Write latest-version.json
+        run: |
+          cat > out/latest-version.json <<JSON
+          {"versionName":"${{ needs.version.outputs.ver }}","versionCode":${{ needs.version.outputs.code }},"tag":"v${{ needs.version.outputs.ver }}"}
+          JSON
+          ls -la out
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.ver }}
+          name: VPN Master v${{ needs.version.outputs.ver }}
+          make_latest: true
+          fail_on_unmatched_files: false
+          body: |
+            ### Download
+            - **Windows:** [VPNMaster.exe](https://github.com/${{ github.repository }}/releases/download/v${{ needs.version.outputs.ver }}/VPNMaster.exe), portable, no installer
+            - **Android:** [VPNMaster.apk](https://github.com/${{ github.repository }}/releases/download/v${{ needs.version.outputs.ver }}/VPNMaster.apk), Android 7.0+
+
+            Always-latest links:
+            `https://github.com/${{ github.repository }}/releases/latest/download/VPNMaster.exe`
+            `https://github.com/${{ github.repository }}/releases/latest/download/VPNMaster.apk`
+
+            Windows SmartScreen may say "Unknown publisher". Click **More info → Run anyway**.
+          files: |
+            out/VPNMaster.exe
+            out/VPNMaster.apk
+            out/latest-version.json

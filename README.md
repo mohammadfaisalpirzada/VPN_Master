@@ -9,6 +9,15 @@
   <img src="docs/screenshots/android-connected.png" width="240" alt="Android: connected">
 </p>
 
+## Download
+
+| Platform | Latest version |
+|---|---|
+| **Windows 10/11** | [⬇ VPNMaster.exe](https://github.com/mohammadfaisalpirzada/VPN_Master/releases/latest/download/VPNMaster.exe) (portable, no installer) |
+| **Android 7.0+** | [⬇ VPNMaster.apk](https://github.com/mohammadfaisalpirzada/VPN_Master/releases/latest/download/VPNMaster.apk) |
+
+These links always point to the newest release. Every release is also listed on [Releases](https://github.com/mohammadfaisalpirzada/VPN_Master/releases) and on [The Master Store](https://themastersahib.com/the-master-store).
+
 ## Features
 
 | | Windows (`VPNMaster.exe`, ~9 MB) | Android (`VPNMaster.apk`, ~4.5 MB) |
@@ -31,7 +40,19 @@ Other details:
 
 The free Proton plan allows one device at a time.
 
-## Building
+## Releasing a new version
+GitHub Actions builds both apps and publishes them. You don't need to build anything locally:
+```bash
+git tag v2.3.0
+git push origin v2.3.0
+```
+`.github/workflows/release.yml` then builds `VPNMaster.exe` and the signed `VPNMaster.apk`, stamps the version into both apps (shown in the app header), and creates the release with `latest-version.json`. The Master Store reads that file to show the version.
+
+**One-time setup for the signed APK.** Add these repository secrets under *Settings → Secrets and variables → Actions*:
+`ANDROID_KEYSTORE_BASE64` (the keystore file, base64), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
+If they're missing, the workflow still publishes the Windows exe and skips the APK.
+
+## Building locally
 
 ### Windows (cross-compiles from Linux, macOS or Windows)
 ```bash

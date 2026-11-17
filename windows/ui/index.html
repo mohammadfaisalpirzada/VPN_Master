@@ -18,6 +18,7 @@
   header{display:flex;align-items:center;justify-content:space-between}
   .brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px;letter-spacing:.1px}
   .logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(140deg,#4f7cff,#2fd79b);display:grid;place-items:center}
+  .ver{font-size:10.5px;font-weight:600;color:#9db4ff;background:rgba(79,124,255,.14);border:1px solid rgba(79,124,255,.35);padding:1px 7px;border-radius:99px;margin-left:2px}
   .chip{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--mute)}
   .dot{width:7px;height:7px;border-radius:50%;background:var(--dim)}
   .dot.on{background:var(--ok);box-shadow:0 0 0 3px rgba(47,215,155,.15)}
@@ -124,7 +125,7 @@
 
 <div class="app">
   <header>
-    <div class="brand"><div class="logo"><svg width="16" height="16"><use href="#i-shield"/></svg></div>VPN Master</div>
+    <div class="brand"><div class="logo"><svg width="16" height="16"><use href="#i-shield"/></svg></div>VPN Master<span class="ver" id="ver">v–</span></div>
     <div class="chip"><span class="dot" id="dot"></span><span id="chip">Not protected</span></div>
   </header>
 
@@ -168,7 +169,7 @@
   </div>
 
   <footer>
-    <span id="foot">v2.2</span>
+    <span id="foot"></span>
     <button onclick="openURL('https://themastersahib.com')">themastersahib.com</button>
   </footer>
 </div>
@@ -275,7 +276,7 @@ function go(){
 
 window.onVpnEvent=({event,data})=>{
   if(event==="servers"){servers=data.list||[];listSrc=data.source;
-    $("foot").textContent=`v2.2 · ${servers.length} public servers`+(data.source!=="live"?" (offline list)":"");fillCountries();render();}
+    $("foot").textContent=`${servers.length} public servers`+(data.source!=="live"?" (offline list)":"");fillCountries();render();}
   else if(event==="status"){if(state==="wait")$("sub").textContent=data;}
   else if(event==="connected"){if(state==="off"){vpnDisconnect();return;}setState("on",esc(data.label));setTimeout(vpnIP,1500);setTimeout(vpnIP,6000);}
   else if(event==="disconnected"){if(state!=="off")setState("off","Select a location to connect");setTimeout(vpnIP,800);}
@@ -289,11 +290,12 @@ $("disc").onclick=disconnect;
 $("usAuto").onclick=e=>{e.stopPropagation();if(state!=="off")return toast("Disconnect first");selConf=null;selected=null;renderConfs();render();go();};
 $("quick").onclick=()=>$("usAuto").click();
 $("best").onclick=()=>{if(state!=="off")return toast("Disconnect first");selConf=null;selected=best();render();go();};
-$("refresh").onclick=()=>{$("foot").textContent="v2.2 · refreshing…";vpnLoadServers();};
+$("refresh").onclick=()=>{$("foot").textContent="Refreshing…";vpnLoadServers();};
 $("country").onchange=()=>{if(state==="off")selected=null;render();};
 document.addEventListener("keydown",e=>{if(e.key==="Escape")$("scrim").classList.remove("show")});
 
-(async()=>{vpnLoadServers();vpnIP();renderConfs();
+(async()=>{try{const v=await appVersion();$("ver").textContent="v"+v.replace(/^v/,"")}catch(e){}
+  vpnLoadServers();vpnIP();renderConfs();
   try{const m=await vpnStatus();if(m){isWG=m==="wg";setState("on","Connected");}}catch(e){}})();
 </script>
 </body>

@@ -36,6 +36,9 @@ import (
 	"github.com/jchv/go-webview2"
 )
 
+// version is set at build time: -ldflags "-X main.version=2.2.0"
+var version = "dev"
+
 //go:embed ui/index.html
 var indexHTML string
 
@@ -496,7 +499,7 @@ func main() {
 	w = webview2.NewWithOptions(webview2.WebViewOptions{
 		AutoFocus: true,
 		WindowOptions: webview2.WindowOptions{
-			Title: "VPN Master — The Master Sahib", Width: 440, Height: uint(height), IconId: 1, Center: true,
+			Title: "VPN Master " + version + " — The Master Sahib", Width: 440, Height: uint(height), IconId: 1, Center: true,
 		},
 	})
 	if w == nil {
@@ -553,6 +556,7 @@ func main() {
 	w.Bind("confList", func() []ConfInfo { return listConfs() })
 	w.Bind("confImport", func(name, text string) (string, error) { return importConf(name, text) })
 	w.Bind("confDelete", func(name string) { os.Remove(filepath.Join(confDir(), filepath.Base(name)+".conf")) })
+	w.Bind("appVersion", func() string { return version })
 	w.Bind("openURL", func(u string) {
 		if strings.HasPrefix(u, "https://") {
 			run("rundll32", "url.dll,FileProtocolHandler", u)

@@ -12,8 +12,8 @@ android {
         applicationId = "com.themastersahib.vpnmaster"
         minSdk = 24
         targetSdk = 35
-        versionCode = 4
-        versionName = "2.2"
+        versionCode = (System.getenv("VERSION_CODE") ?: "20200").toInt()
+        versionName = System.getenv("APP_VERSION") ?: "2.2.0"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
     }
     // Release signing: put keystore.properties (storeFile, storePassword, keyAlias, keyPassword)
